@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:c="http://www.springframework.org/schema/c" xmlns:cache="http://www.springframework.org/schema/cache"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc" xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:lang="http://www.springframework.org/schema/lang" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:mybatis-spring="http://mybatis.org/schema/mybatis-spring"
+	xmlns:p="http://www.springframework.org/schema/p" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.0.xsd
+		http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache-4.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc-4.0.xsd
+		http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.0.xsd
+		http://www.springframework.org/schema/lang http://www.springframework.org/schema/lang/spring-lang-4.0.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.0.xsd
+		http://mybatis.org/schema/mybatis-spring http://mybatis.org/schema/mybatis-spring-1.2.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-4.0.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-4.0.xsd">
+	<!-- spring除了控制层都进行扫描，如果不进行这样设置，两个文件就会进行同样的扫描，就会发生重复的对象产生 -->
+	<context:component-scan base-package="com.ty">
+		<context:exclude-filter type="annotation"
+			expression="org.springframework.stereotype.Controller" />
+		<context:exclude-filter type="annotation"
+			expression="org.springframework.web.bind.annotation.ControllerAdvice" />
+	</context:component-scan>
+	<!-- 进行数据源，其他框架的整合，事务的配置 -->
+	<!-- 引入数据库的配置文件 -->
+	<context:property-placeholder location="classpath:init.properties" />
+	<!-- Spring用来控制业务逻辑。数据源、事务控制、aop -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="jdbcUrl" value="${jdbc.url}"></property>
+		<property name="driverClass" value="${jdbc.driver}"></property>
+		<property name="user" value="${jdbc.username}"></property>
+		<property name="password" value="${jdbc.password}"></property>
+	</bean>
+	
+	<!--创建出SqlSessionFactory对象 -->
+	<bean id="sqlSessionFactoryBean" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"></property>
+		<!-- configLocation指定全局配置文件的位置 -->
+		<property name="configLocation" value="classpath:mybatis-config.xml"></property>
+		<!--mapperLocations: 指定mapper文件的位置 -->
+		<property name="mapperLocations" value="classpath:mapper/*.xml"></property>
+	</bean>
+
+	<!-- 扫描所有的mapper接口，注入到ioc容器 -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="com.ty.dao"></property>
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactoryBean"></property>
+	</bean>
+	
+	<!-- spring事务管理 -->
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+
+	<!-- 开启事務的方式：1.基于注解的事务 2.利用.xml文件進行配置-->
+	<!--1.開啟注解  -->
+	<!-- <tx:annotation-driven transaction-manager="dataSourceTransactionManager" /> -->
+	
+	<!--2.利用.xml文件配置事務  -->
+	<aop:config>
+	<!--
+		切入點表達式:
+		1.第一個星表示全限：表示所有的權限
+		2.com.ty.service服務這個包下的所有方法：..*，中很多參數：(..):说明哪些方法需要植入增强
+	  -->
+		<aop:pointcut expression="execution(* com.ty.service..*(..))" id="txPoint"/>
+		<!--配置事務的增強  -->
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="txPoint"/>
+	</aop:config>
+	
+	<!--配置事務的增強：事務如何切入:
+	一般不配置 transaction-manager是因为它默认的值就是transactionManager
+	所以和前面的事务名字相对应，就不用进行配置，如果名字不对应，就必须得进行配置 -->
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<!--表示所有的方法  -->
+			<tx:method name="*"/>
+			<!--以get开始的所有方法  -->
+			<tx:method name="get*" read-only="true"/>
+		</tx:attributes>
+	</tx:advice>
+	
+	<!-- 配置一个可以批量生成的sqlSession -->
+	<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+		<constructor-arg name="sqlSessionFactory" ref="sqlSessionFactoryBean"></constructor-arg>
+		<constructor-arg name="executorType" value="BATCH"></constructor-arg>
+	</bean>
+</beans>
